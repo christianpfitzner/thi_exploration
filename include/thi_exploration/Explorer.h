@@ -15,7 +15,9 @@
 
 class Frontier
 {
-
+public: 
+  unsigned int index_in_map; 
+  unsigned int group; 
 };
 
 
@@ -72,14 +74,16 @@ class Explorer
       // const nav_msgs::OccupancyGrid resizedMap      = this->resizeMap(_map, 0.1);
 
 
-      ROS_ERROR_STREAM("Free cells: " << this->getFreeCellsInMap(_map)    ); 
-      ROS_ERROR_STREAM("occ  cells: " << this->getOccupiedCellsInMap(_map)); 
-      ROS_ERROR_STREAM("unkn cells: " << this->getUnknownCellsInMap(_map) ); 
+      ROS_ERROR_STREAM("Free cells:     " << this->getFreeCellsInMap(_map)    ); 
+      ROS_ERROR_STREAM("occ  cells:     " << this->getOccupiedCellsInMap(_map)); 
+      ROS_ERROR_STREAM("unkn cells:     " << this->getUnknownCellsInMap(_map) ); 
 
       // find frontiers
       const nav_msgs::OccupancyGrid frontier_map    = this->findFrontiers(_map);
+      
+      ROS_ERROR_STREAM("frontier cells: " << this->getFrontierCellsInMap(_map) ); 
 
-      // // group frontiers 
+      // group frontiers 
       std::vector< std::vector<Frontier> > groups = this->groupFrontiers(frontier_map);
 
       // // weight frontiers      
@@ -121,7 +125,11 @@ private:
     unsigned int getOccupiedCellsInMap(const nav_msgs::OccupancyGrid map)
     {
       return this->getNrCellsInMap(map, OCCUPIED); 
+    }
 
+    unsigned int getFrontierCellsInMap(const nav_msgs::OccupancyGrid map)
+    {
+      return this->getNrCellsInMap(map, FRONTIER); 
     }
 
     /**
@@ -283,18 +291,14 @@ private:
 
       // todo make this a function to copy the map information
       nav_msgs::OccupancyGrid frontier_map = copy(map);  
-      const auto map_size          = frontier_map.info.width * frontier_map.info.height;  
+      const auto map_size                  = frontier_map.info.width * frontier_map.info.height;  
       frontier_map.data.resize(map_size); 
 
-
-
-
-      ROS_ERROR_STREAM("Size: " << frontier_map.data.size());
 
       // iterate over all frontier cells 
       const auto nr_of_cells = map.info.height*map.info.width; 
 
-      for (size_t i = 0; i < nr_of_cells; i++)
+      for (auto i = 0; i < nr_of_cells; i++)
       {
         const auto current_cell = map.data[i];
 
@@ -302,14 +306,8 @@ private:
         {
           const std::vector<int> neighbors = this->getNeighborIndices(i, map); 
 
-          if( this->neighborIsUnknown(neighbors, map))
-          {
-            frontier_map.data[i] = FRONTIER; 
-          }
-          else 
-          {
-            frontier_map.data[i] = NO_FRONTIER;
-          }
+          if( this->neighborIsUnknown(neighbors, map))      frontier_map.data[i] = FRONTIER; 
+          else                                              frontier_map.data[i] = NO_FRONTIER;
         }
         else
         {
@@ -328,32 +326,94 @@ private:
     }
 
 
+    void floodFill(nav_msgs::OccupancyGrid* map, unsigned int idx, int oldValue, int newValue)
+    {
+      // check if index is valid
+      if( !idxInRange(idx, *map) )
+      {
+        return; 
+      }
+
+      // check if the current cell is the old value
+      if(map->data[idx] != oldValue)
+      {
+        return; 
+      }
+
+      map->data[idx] = newValue; 
+
+      // apply recursion
+      const auto neighbors = this->getNeighborIndices(idx, *map, true); 
+      for (const auto n : neighbors)
+      {
+        floodFill(map, n, oldValue, newValue); 
+      }
+
+
+
+    }
+
+
     /**
      * @brief 
      * 
      * @param map 
      * @return std::vector<Frontier> 
      */
-    std::vector< std::vector<Frontier> > groupFrontiers(const nav_msgs::OccupancyGrid map) const
+    std::vector< std::vector<Frontier> > groupFrontiers(nav_msgs::OccupancyGrid map) 
     {
-        std::vector< std::vector<Frontier> > groups; 
-
-
         const auto nr_of_cells = map.info.height*map.info.width; 
 
+        auto group_idx = 111;             //!todo remove the magic number
         for (size_t i = 0; i < nr_of_cells; i++)
         {
-          const auto cell = map.data[i];
+          if(map.data[i] != FRONTIER)
+            continue; 
 
-          if(cell == FRONTIER)
-          {
-            const auto neighbors = this->getNeighborIndices(i, map, true);
-
-          }
-
-
-
+          this->floodFill(&map, i, FRONTIER, group_idx); 
+          group_idx++;         
         }
+
+
+        const auto nr_of_groups = group_idx - 111; 
+
+
+        std::vector< std::vector<Frontier> > groups; 
+        groups.resize(nr_of_groups); 
+
+
+
+        for (size_t i = 0; i <nr_of_cells ; i++)
+        {
+
+          const auto current_cell = map.data[i];
+          if(current_cell == NO_FRONTIER)
+            continue; 
+
+
+          const auto current_group_idx = current_cell - 111;  // substract the starting value of the group
+          
+          Frontier f; 
+          f.group        = current_group_idx; 
+          f.index_in_map = i; 
+          groups[current_group_idx].push_back(f); 
+        }
+
+
+        for(size_t i=0 ; i<groups.size() ; i++)
+        {
+          ROS_ERROR_STREAM("Group " << i << ": " << groups[i].size()); 
+        }
+
+
+              // publish debug message if anyone is interested
+      if(_frontier_map_pub.getNumSubscribers() > 0)
+      {
+        _frontier_map_pub.publish(map); 
+      }
+
+
+
         return groups; 
     }
 
