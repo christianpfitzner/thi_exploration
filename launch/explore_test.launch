@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+
+
+
+<launch>
+    <node pkg="map_server" type="map_server" name="map_server" output="log" respawn="false" respawn_delay="0" args="$(find thi_exploration)/launch/maps/testmap.yaml">
+        
+    </node>
+
+
+
+    <node pkg="thi_exploration" type="thi_exploration_node" name="thi_exploration_node">
+        
+    </node>
+
+
+
+
+</launch>
