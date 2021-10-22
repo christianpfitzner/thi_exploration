@@ -1,7 +1,6 @@
 <?xml version="1.0"?>
 
-
-
+<!-- <arg name="use_DEBUG_OUTPUT" default="1"/> -->
 <launch>
     <node pkg="map_server" type="map_server" name="map_server" output="log" respawn="false" respawn_delay="0" args="$(find thi_exploration)/launch/maps/testmap.yaml">
         
@@ -11,9 +10,13 @@
 
     <node pkg="thi_exploration" type="thi_exploration_node" name="thi_exploration_node">
         
-    </node>
+    </node>     
 
 
+
+<!-- <group if="$(arg use_DEBUG_OUTPUT)" >
+         <node pkg="rosservice" type="rosservice" name="set_logger_level" args="call /thi_exploration_node/set_logger_level '{logger: 'rosout', level: 'ERROR'}'"/>
+</group> -->
 
 
 </launch>
