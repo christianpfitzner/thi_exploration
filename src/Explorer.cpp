@@ -14,6 +14,8 @@
 #include <tf2/LinearMath/Quaternion.h>
 
 
+
+
 using namespace thi; 
 
 
@@ -27,7 +29,7 @@ Explorer::Explorer(ros::NodeHandle nh)
     _frontier_map_pub = _nh.advertise<nav_msgs::OccupancyGrid>("debug/frontier_map", queue_size); 
 
 
-    _frontier_goal_pub = _nh.advertise<geometry_msgs::PoseArray>("debug/frontier_pose", queue_size); 
+    _frontier_goal_pub = _nh.advertise<visualization_msgs::MarkerArray>("debug/frontier_pose", queue_size); 
 }
 
 
@@ -172,8 +174,6 @@ std::vector<int> thi::Explorer::getNeighborIndices(const unsigned int idx, const
 
 nav_msgs::OccupancyGrid Explorer::findFrontiers(const nav_msgs::OccupancyGrid map) const
 {
-
-    // todo make this a function to copy the map information
     nav_msgs::OccupancyGrid frontier_map = copy(map);  
     const auto map_size                  = frontier_map.info.width * frontier_map.info.height;  
     frontier_map.data.resize(map_size); 
@@ -286,49 +286,63 @@ std::vector< std::vector<Frontier> > Explorer::groupFrontiers(nav_msgs::Occupanc
     }
 
 
-    geometry_msgs::PoseArray pose_array; 
-    pose_array.header.seq       = map.header.seq; 
-    pose_array.header.frame_id  = map.header.frame_id; 
-    pose_array.header.stamp     = map.header.stamp; 
-
+    visualization_msgs::MarkerArray pose_array; 
+    
 
     // calculate the centroid cell for all frontiers
+    auto id = 0; 
     for(const auto group : groups)
     {
-        geometry_msgs::Pose pose; 
+        visualization_msgs::Marker pose; 
+        pose.header.frame_id = "map"; 
+        pose.header.stamp    = ros::Time(); 
+        pose.ns  = "my_namespace"; 
+        pose.id = id++; 
+
         auto centroid_row = 0;
         auto centroid_col = 0;  
         for(auto i=0 ; i< group.size() ; i++)
         {
             Point2D_uint coord = getCoordFromIndex(map, group[i].index_in_map); 
-            centroid_row += coord.row; 
-            centroid_col += coord.col; 
+            centroid_row      += coord.row; 
+            centroid_col      += coord.col; 
         }
 
-        pose.position.x = centroid_row / group.size(); 
-        pose.position.y = centroid_col / group.size(); 
+        pose.pose.position.x = centroid_row / group.size() * map.info.resolution; 
+        pose.pose.position.y = centroid_col / group.size() * map.info.resolution; 
 
         tf2::Quaternion q;
         q.setRPY( 90, 0, 0 );
         q.normalize(); 
 
-        pose.orientation.w = q[3]; 
-        pose.orientation.x = q[0]; 
-        pose.orientation.y = q[1]; 
-        pose.orientation.z = q[2]; 
+        pose.pose.orientation.w = q[3]; 
+        pose.pose.orientation.x = q[0]; 
+        pose.pose.orientation.y = q[1]; 
+        pose.pose.orientation.z = q[2]; 
 
-        ROS_ERROR_STREAM("centroid: " << pose.position.x << " " << pose.position.y); 
+        pose.type = visualization_msgs::Marker::SPHERE; 
 
-        pose_array.poses.push_back(pose); 
+        pose.scale.x = 0.1;
+        pose.scale.y = 0.1;
+        pose.scale.z = 0.1;
+        pose.color.a = 1.0; // Don't forget to set the alpha!
+        pose.color.r = 1.0;
+        pose.color.g = 0.0;
+        pose.color.b = 0.0;
+
+
+        ROS_ERROR_STREAM("centroid: " << pose.pose.position.x << " " << pose.pose.position.y); 
+
+        pose_array.markers.push_back(pose); 
     }
 
 
-    _frontier_goal_pub.publish(pose_array); 
+    
 
-    // publish debug message if anyone is interested
+    // // publish debug message if anyone is interested
     if(_frontier_map_pub.getNumSubscribers() > 0)
     {
-    _frontier_map_pub.publish(map); 
+        _frontier_goal_pub.publish(pose_array); 
     }
 
 
