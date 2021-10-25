@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+
+
+<launch>
+
+    <include file="$(find turtlebot3_navigation)/launch/move_base.launch" />
+
+
+  <node pkg="slam_toolbox" type="async_slam_toolbox_node" name="slam_toolbox" output="screen">
+    <rosparam command="load" file="$(find slam_toolbox)/config/mapper_params_online_async.yaml" />
+  </node>
+
+
+<!--  -->
+   <node pkg="tf" type="static_transform_publisher" name="parent_to_child_static_tf" args="0 0 0 0 0 0 base_footprint base_scan 100" />
+
+</launch>

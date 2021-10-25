@@ -16,6 +16,9 @@
 #include <thi_exploration/MapOperations.h>
 
 
+#include <limits> 
+
+
 using namespace thi; 
 
 
@@ -246,9 +249,8 @@ std::vector<Frontier> Explorer::weightFrontiers(std::vector<Frontier> frontiers)
     current_pose.x = 0.0; 
     current_pose.y = 0.0;
 
-
-    auto closest_idx  = 99999; 
-    auto closest_dist = 9999999.9;
+    auto closest_idx  = std::numeric_limits<unsigned int>::max(); 
+    auto closest_dist = std::numeric_limits<unsigned int>::max();
 
     // calculate the euclidean distance between a frontier and the robot
     for(auto i=0; i<frontiers.size() ; i++)
