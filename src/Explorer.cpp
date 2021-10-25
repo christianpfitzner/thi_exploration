@@ -13,7 +13,7 @@
 #include <thi_exploration/Explorer.h>
 #include <tf2/LinearMath/Quaternion.h>
 
-
+#include <thi_exploration/MapOperations.h>
 
 
 using namespace thi; 
@@ -38,160 +38,52 @@ Explorer::~Explorer(void)
     // default destructor for this class
 }
 
-bool Explorer::idxInRange(const unsigned int idx, const nav_msgs::OccupancyGrid map) const
+
+
+
+
+void Explorer::process(void)
 {
+    // // resize map to speed up exploration
+    // const nav_msgs::OccupancyGrid resizedMap      = this->resizeMap(_map, 0.1);
 
-    const auto map_size = map.info.width*map.info.height; 
+    ROS_ERROR_STREAM("Free cells:     " << thi::MapOperations::getFreeCellsInMap(    _map)); 
+    ROS_ERROR_STREAM("occ  cells:     " << thi::MapOperations::getOccupiedCellsInMap(_map)); 
+    ROS_ERROR_STREAM("unkn cells:     " << thi::MapOperations::getUnknownCellsInMap( _map)); 
 
-    // check if the index within the range of the map
-    if(idx < 0)        return false;    
-    if(idx > map_size) return false; 
-
-    return true; 
-}
-
-
-
-bool Explorer::neighborIsUnknown(const std::vector<int> neighbors, const nav_msgs::OccupancyGrid map) const
-{
-    for (auto i = 0; i < neighbors.size() ; i++)
-    {
-        if(map.data[neighbors[i]] == UNKNOWN)    return true; 
-    }
-
-    return false; 
-}
-
-
-
-nav_msgs::OccupancyGrid Explorer::copy(const nav_msgs::OccupancyGrid input) const 
-{
-    nav_msgs::OccupancyGrid output; 
-    output.header.frame_id = input.header.frame_id; 
-    output.header.seq      = input.header.seq; 
-    output.header.stamp    = input.header.stamp; 
-    output.info.height     = input.info.height; 
-    output.info.width      = input.info.width;  
-    output.info.height     = input.info.height; 
-    output.info.resolution = input.info.resolution;
+    // find frontiers
+    const nav_msgs::OccupancyGrid frontier_map    = this->findFrontiers(_map);
     
-    return output; 
+    ROS_ERROR_STREAM("frontier cells: " << thi::MapOperations::getFrontierCellsInMap(_map) ); 
+
+    // group frontiers 
+    std::vector< Frontier > frontiers = this->groupFrontiers(frontier_map);
+
+    // // weight frontiers      
+    // const std::vector<Frontier> frontier_weighted = this->weightFrontiers(frontier_grouped);
 }
-
-
-
-
-unsigned int Explorer::getNrCellsInMap(const nav_msgs::OccupancyGrid map, int state)
-{
-    auto counter = 0; 
-    
-    // iterate over all frontier cells 
-    const auto nr_of_cells = map.info.height*map.info.width; 
-
-    for (auto  i = 0; i < nr_of_cells; i++)
-    {
-        const auto current_cell = map.data[i];
-        if(current_cell == state)
-        {
-            counter++; 
-        }
-    }
-
-    return counter; 
-}
-
-
-std::vector<int> thi::Explorer::getNeighborIndices(const unsigned int idx, const nav_msgs::OccupancyGrid map, bool get8Neighbors /* =  false */) const
-{
-    std::vector<int> neighbors; 
-
-    const auto width  = map.info.width; 
-    const auto height = map.info.height; 
-
-    // top
-    {
-        const auto top_idx     = idx - width; 
-        if(this->idxInRange(top_idx, map))     neighbors.push_back(top_idx); 
-        else                                   neighbors.push_back(thi::UNVALID); 
-    }
-
-    // bottom
-    {
-        const auto bottom_idx  = idx + width; 
-        if(this->idxInRange(bottom_idx, map))  neighbors.push_back(bottom_idx); 
-        else                                   neighbors.push_back(thi::UNVALID); 
-    }
-    
-    // left
-    {
-        const auto left_idx    = idx - 1; 
-        if(this->idxInRange(left_idx, map))    neighbors.push_back(left_idx); 
-        else                                   neighbors.push_back(thi::UNVALID); 
-    }
-
-    // right
-    {
-        const auto right_idx   = idx + 1; 
-        if(this->idxInRange(right_idx, map))   neighbors.push_back(right_idx); 
-        else                                   neighbors.push_back(thi::UNVALID);
-    }
-
-    if(get8Neighbors == true)
-    {
-        // top left
-        {
-            const auto top_left_idx     = idx - width - 1; 
-            if(this->idxInRange(top_left_idx, map))     neighbors.push_back(top_left_idx); 
-            else                                        neighbors.push_back(thi::UNVALID); 
-        }
-
-        // top right
-        {
-            const auto top_right_idx     = idx - width + 1; 
-            if(this->idxInRange(top_right_idx, map))    neighbors.push_back(top_right_idx); 
-            else                                        neighbors.push_back(thi::UNVALID); 
-        }
-
-        // bottom left
-        {
-            const auto bottom_left_idx     = idx + width - 1; 
-            if(this->idxInRange(bottom_left_idx, map))  neighbors.push_back(bottom_left_idx); 
-            else                                        neighbors.push_back(thi::UNVALID); 
-        }
-
-        // bottom right
-        {
-            const auto bottom_right_idx     = idx + width + 1; 
-            if(this->idxInRange(bottom_right_idx, map)) neighbors.push_back(bottom_right_idx); 
-            else                                        neighbors.push_back(thi::UNVALID); 
-        }
-
-    }
-    return neighbors; 
-};
-
 
 
 nav_msgs::OccupancyGrid Explorer::findFrontiers(const nav_msgs::OccupancyGrid map) const
 {
-    nav_msgs::OccupancyGrid frontier_map = copy(map);  
+    nav_msgs::OccupancyGrid frontier_map = thi::MapOperations::copy(map);  
     const auto map_size                  = frontier_map.info.width * frontier_map.info.height;  
     frontier_map.data.resize(map_size); 
 
 
     // iterate over all frontier cells 
-    const auto nr_of_cells = map.info.height*map.info.width; 
-
-    for (auto i = 0; i < nr_of_cells; i++)
+    for (auto i = 0; i < map_size; i++)
     {
         const auto current_cell = map.data[i];
 
         if(current_cell == FREE)
         {
-            const std::vector<int> neighbors = this->getNeighborIndices(i, map); 
+            const std::vector<int> neighbors = thi::MapOperations::getNeighborIndices(i, map, false); 
 
-            if( this->neighborIsUnknown(neighbors, map))      frontier_map.data[i] = FRONTIER; 
-            else                                              frontier_map.data[i] = NO_FRONTIER;
+            if( thi::MapOperations::neighborIsUnknown(neighbors, map))      
+                frontier_map.data[i] = FRONTIER; 
+            else                                              
+                frontier_map.data[i] = NO_FRONTIER;
         }
         else
         {
@@ -205,7 +97,6 @@ nav_msgs::OccupancyGrid Explorer::findFrontiers(const nav_msgs::OccupancyGrid ma
     _frontier_map_pub.publish(frontier_map); 
     }
 
-
     return frontier_map; 
 }
 
@@ -214,7 +105,7 @@ nav_msgs::OccupancyGrid Explorer::findFrontiers(const nav_msgs::OccupancyGrid ma
 void Explorer::floodFill(nav_msgs::OccupancyGrid* map, unsigned int idx, int oldValue, int newValue)
 {
     // check if index is valid
-    if( !idxInRange(idx, *map) )
+    if( !thi::MapOperations::idxInRange(idx, *map) )
     {
         return; 
     }
@@ -228,7 +119,7 @@ void Explorer::floodFill(nav_msgs::OccupancyGrid* map, unsigned int idx, int old
     map->data[idx] = newValue; 
 
     // apply recursion
-    const auto neighbors = this->getNeighborIndices(idx, *map, true); 
+    const auto neighbors = thi::MapOperations::getNeighborIndices(idx, *map, true); 
     for (const auto n : neighbors)
     {
         floodFill(map, n, oldValue, newValue); 
@@ -237,7 +128,7 @@ void Explorer::floodFill(nav_msgs::OccupancyGrid* map, unsigned int idx, int old
 
 
 
-std::vector< std::vector<Frontier> > Explorer::groupFrontiers(nav_msgs::OccupancyGrid map) 
+std::vector< Frontier > Explorer::groupFrontiers(nav_msgs::OccupancyGrid map) 
 {
     const auto nr_of_cells = map.info.height*map.info.width; 
 
@@ -258,31 +149,36 @@ std::vector< std::vector<Frontier> > Explorer::groupFrontiers(nav_msgs::Occupanc
 
 
     // create a vector with the size of all groups
-    std::vector< std::vector<Frontier> > groups; 
-    groups.resize(nr_of_groups); 
+    std::vector< Frontier > frontiers; 
+    frontiers.resize(nr_of_groups); 
+
+    // init all frontiers
+    for(auto i=0 ; i<nr_of_groups ; i++)
+    {
+        frontiers[i].setMap(_map); 
+    }
+
 
 
 
     for (size_t i = 0; i <nr_of_cells ; i++)
     {
         const auto current_cell = map.data[i];
+
         if(current_cell == NO_FRONTIER)
             continue; 
 
-
         const auto current_group_idx = current_cell - group_idx_start;  // substract the starting value of the group
         
-        Frontier f; 
-        f.group        = current_group_idx; 
-        f.index_in_map = i; 
-        groups[current_group_idx].push_back(f); 
+        frontiers[current_group_idx].group = current_group_idx; 
+        frontiers[current_group_idx].addIndex(i); 
     }
 
 
     // output to user about the number of groups
-    for(size_t i=0 ; i<groups.size() ; i++)
+    for(size_t i=0 ; i<frontiers.size() ; i++)
     {
-        ROS_DEBUG_STREAM("Group " << i << ": " << groups[i].size()); 
+        ROS_DEBUG_STREAM("Group " << i << ": " << frontiers[i].getSize()); 
     }
 
 
@@ -291,25 +187,17 @@ std::vector< std::vector<Frontier> > Explorer::groupFrontiers(nav_msgs::Occupanc
 
     // calculate the centroid cell for all frontiers
     auto id = 0; 
-    for(const auto group : groups)
+    for(const auto f : frontiers)
     {
         visualization_msgs::Marker pose; 
         pose.header.frame_id = "map"; 
         pose.header.stamp    = ros::Time(); 
-        pose.ns  = "my_namespace"; 
-        pose.id = id++; 
+        pose.ns              = "exploration"; 
+        pose.id              = id++; 
 
-        auto centroid_row = 0;
-        auto centroid_col = 0;  
-        for(auto i=0 ; i< group.size() ; i++)
-        {
-            Point2D_uint coord = getCoordFromIndex(map, group[i].index_in_map); 
-            centroid_row      += coord.row; 
-            centroid_col      += coord.col; 
-        }
-
-        pose.pose.position.x = centroid_row / group.size() * map.info.resolution; 
-        pose.pose.position.y = centroid_col / group.size() * map.info.resolution; 
+        const auto centroid  = f.getCentroid();
+        pose.pose.position.x = centroid.x; 
+        pose.pose.position.y = centroid.y; 
 
         tf2::Quaternion q;
         q.setRPY( 90, 0, 0 );
@@ -325,19 +213,16 @@ std::vector< std::vector<Frontier> > Explorer::groupFrontiers(nav_msgs::Occupanc
         pose.scale.x = 0.1;
         pose.scale.y = 0.1;
         pose.scale.z = 0.1;
-        pose.color.a = 1.0; // Don't forget to set the alpha!
+        pose.color.a = 1.0; 
         pose.color.r = 1.0;
         pose.color.g = 0.0;
         pose.color.b = 0.0;
 
 
-        ROS_ERROR_STREAM("centroid: " << pose.pose.position.x << " " << pose.pose.position.y); 
+        ROS_DEBUG_STREAM("centroid: " << pose.pose.position.x << " " << pose.pose.position.y); 
 
         pose_array.markers.push_back(pose); 
     }
-
-
-    
 
     // // publish debug message if anyone is interested
     if(_frontier_map_pub.getNumSubscribers() > 0)
@@ -347,5 +232,29 @@ std::vector< std::vector<Frontier> > Explorer::groupFrontiers(nav_msgs::Occupanc
 
 
 
-    return groups; 
+    return frontiers; 
+}
+
+
+std::vector<Frontier> Explorer::weightFrontiers(std::vector<Frontier> frontiers) const
+{
+    std::vector<Frontier> weighted_frontiers; 
+
+
+
+    // get the current pose of the robot
+
+
+
+
+    // calculate the euclidean distance between a frontier and the robot
+
+
+
+    
+
+
+
+
+    return weighted_frontiers; 
 }

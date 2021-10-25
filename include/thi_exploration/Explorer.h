@@ -19,14 +19,8 @@
 #include <geometry_msgs/PoseArray.h>
 #include <visualization_msgs/MarkerArray.h>
 
-class Frontier
-{
-public: 
-  unsigned int index_in_map; 
-  unsigned int group; 
-};
 
-
+#include <thi_exploration/Frontier.h>
 
 
 
@@ -34,14 +28,6 @@ public:
 
 namespace thi
 {
-  constexpr auto FREE     =  0;
-  constexpr auto UNKNOWN  = -1;  
-  constexpr auto OCCUPIED =  100;
-
-  constexpr auto UNVALID     =  0; 
-  constexpr auto FRONTIER    =  100; 
-  constexpr auto NO_FRONTIER =  50; 
-
 
 struct Point2D_uint
 {
@@ -73,82 +59,16 @@ class Explorer
      * @brief Set the Map object
      * @param map 
      */
-    void setMap(const nav_msgs::OccupancyGrid::ConstPtr map)
-    {
-      _map = *map; 
-    }
+    void setMap(const nav_msgs::OccupancyGrid::ConstPtr map) { _map = *map; }
 
 
     /**
      * @brief function to process exploration
      */
-    void process(void)
-    {
-      // // resize map to speed up exploration
-      // const nav_msgs::OccupancyGrid resizedMap      = this->resizeMap(_map, 0.1);
-
-
-      ROS_ERROR_STREAM("Free cells:     " << this->getFreeCellsInMap(_map)    ); 
-      ROS_ERROR_STREAM("occ  cells:     " << this->getOccupiedCellsInMap(_map)); 
-      ROS_ERROR_STREAM("unkn cells:     " << this->getUnknownCellsInMap(_map) ); 
-
-      // find frontiers
-      const nav_msgs::OccupancyGrid frontier_map    = this->findFrontiers(_map);
-      
-      ROS_ERROR_STREAM("frontier cells: " << this->getFrontierCellsInMap(_map) ); 
-
-      // group frontiers 
-      std::vector< std::vector<Frontier> > groups = this->groupFrontiers(frontier_map);
-
-      // // weight frontiers      
-      // const std::vector<Frontier> frontier_weighted = this->weightFrontiers(frontier_grouped);
-    }
+    void process(void); 
 
 
 private: 
-    unsigned int getNrCellsInMap(const nav_msgs::OccupancyGrid map, int state); 
-
-
-    unsigned int getUnknownCellsInMap( const nav_msgs::OccupancyGrid map)
-    {
-      return this->getNrCellsInMap(map, UNKNOWN); 
-    }
-
-    unsigned int getFreeCellsInMap(const nav_msgs::OccupancyGrid map)
-    {
-      return this->getNrCellsInMap(map, FREE); 
-    }
-
-    unsigned int getOccupiedCellsInMap(const nav_msgs::OccupancyGrid map)
-    {
-      return this->getNrCellsInMap(map, OCCUPIED); 
-    }
-
-    unsigned int getFrontierCellsInMap(const nav_msgs::OccupancyGrid map)
-    {
-      return this->getNrCellsInMap(map, FRONTIER); 
-    }
-
-    thi::Point2D_uint getCoordFromIndex(const nav_msgs::OccupancyGrid map, unsigned int idx) const
-    {
-      Point2D_uint coord; 
-
-      coord.col = idx % map.info.height; 
-      coord.row = idx / map.info.width; 
-
-      return coord; 
-    }
-
-
-    unsigned int getIndexFromCoord(const nav_msgs::OccupancyGrid map, unsigned int col, unsigned int row) const 
-    {
-      unsigned int idx = 0; 
-
-      idx = map.info.width*row + col; 
-
-      return idx; 
-    }
-
 
     /**
      * @brief Function to resize the occupancy grid
@@ -178,38 +98,6 @@ private:
 
 
     /**
-     * @brief Function to check wheater a cell is valid or not
-     * 
-     * @param idx 
-     * @param map 
-     * @return true 
-     * @return false 
-     */
-    bool idxInRange(const unsigned int idx, const nav_msgs::OccupancyGrid map) const; 
-
-    /**
-     * @brief Get the Neighbor Indices object
-     * 
-     * @param idx 
-     * @param map 
-     * @return std::vector<int> 
-     */
-    std::vector<int> getNeighborIndices(const unsigned int idx, const nav_msgs::OccupancyGrid map, bool get8Neighbors = false) const; 
-    /**
-     * @brief 
-     * 
-     * @param neighbors 
-     * @param map 
-     * @return 
-     */
-    bool neighborIsUnknown(const std::vector<int> neighbors, const nav_msgs::OccupancyGrid map) const; 
-
-    /**
-     * Function to copy a occupancy grid 
-     */
-    nav_msgs::OccupancyGrid copy(const nav_msgs::OccupancyGrid input) const; 
-
-    /**
      * @brief 
      * 
      * @param map 
@@ -227,7 +115,7 @@ private:
      * @param map 
      * @return std::vector<Frontier> 
      */
-    std::vector< std::vector<Frontier> > groupFrontiers(nav_msgs::OccupancyGrid map); 
+    std::vector< Frontier > groupFrontiers(nav_msgs::OccupancyGrid map); 
 
 
 
@@ -237,16 +125,8 @@ private:
      * @param frontiers 
      * @return std::vector<Frontier> 
      */
-    std::vector<Frontier> weightFrontiers(std::vector<Frontier> frontiers) const
-    {
-      std::vector<Frontier> weighted_frontiers; 
+    std::vector<Frontier> weightFrontiers(std::vector<Frontier> frontiers) const; 
 
-
-
-
-
-      return weighted_frontiers; 
-    }
 
   private:
     ros::NodeHandle         _nh;      //!< node handle of ros node
