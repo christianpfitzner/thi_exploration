@@ -30,6 +30,8 @@ Explorer::Explorer(ros::NodeHandle nh)
 
 
     _frontier_goal_pub = _nh.advertise<visualization_msgs::MarkerArray>("debug/frontier_pose", queue_size); 
+
+
 }
 
 
@@ -47,10 +49,6 @@ void Explorer::process(void)
     // // resize map to speed up exploration
     // const nav_msgs::OccupancyGrid resizedMap      = this->resizeMap(_map, 0.1);
 
-    ROS_ERROR_STREAM("Free cells:     " << thi::MapOperations::getFreeCellsInMap(    _map)); 
-    ROS_ERROR_STREAM("occ  cells:     " << thi::MapOperations::getOccupiedCellsInMap(_map)); 
-    ROS_ERROR_STREAM("unkn cells:     " << thi::MapOperations::getUnknownCellsInMap( _map)); 
-
     // find frontiers
     const nav_msgs::OccupancyGrid frontier_map    = this->findFrontiers(_map);
     
@@ -59,8 +57,8 @@ void Explorer::process(void)
     // group frontiers 
     std::vector< Frontier > frontiers = this->groupFrontiers(frontier_map);
 
-    // // weight frontiers      
-    // const std::vector<Frontier> frontier_weighted = this->weightFrontiers(frontier_grouped);
+    // weight frontiers      
+    const std::vector<Frontier> frontier_weighted = this->weightFrontiers(frontiers);
 }
 
 
@@ -159,8 +157,6 @@ std::vector< Frontier > Explorer::groupFrontiers(nav_msgs::OccupancyGrid map)
     }
 
 
-
-
     for (size_t i = 0; i <nr_of_cells ; i++)
     {
         const auto current_cell = map.data[i];
@@ -175,16 +171,21 @@ std::vector< Frontier > Explorer::groupFrontiers(nav_msgs::OccupancyGrid map)
     }
 
 
+    this->publishMarker(frontiers); 
+
+    return frontiers; 
+}
+
+
+void Explorer::publishMarker(std::vector<Frontier> frontiers) const
+{
     // output to user about the number of groups
     for(size_t i=0 ; i<frontiers.size() ; i++)
     {
         ROS_DEBUG_STREAM("Group " << i << ": " << frontiers[i].getSize()); 
     }
 
-
     visualization_msgs::MarkerArray pose_array; 
-    
-
     // calculate the centroid cell for all frontiers
     auto id = 0; 
     for(const auto f : frontiers)
@@ -230,11 +231,7 @@ std::vector< Frontier > Explorer::groupFrontiers(nav_msgs::OccupancyGrid map)
         _frontier_goal_pub.publish(pose_array); 
     }
 
-
-
-    return frontiers; 
 }
-
 
 std::vector<Frontier> Explorer::weightFrontiers(std::vector<Frontier> frontiers) const
 {
@@ -243,13 +240,29 @@ std::vector<Frontier> Explorer::weightFrontiers(std::vector<Frontier> frontiers)
 
 
     // get the current pose of the robot
+    // const auto current_pose = this->getRobotsPose(); 
+
+    geometry_msgs::Point32 current_pose; 
+    current_pose.x = 0.0; 
+    current_pose.y = 0.0;
 
 
-
+    auto closest_idx  = 99999; 
+    auto closest_dist = 9999999.9;
 
     // calculate the euclidean distance between a frontier and the robot
+    for(auto i=0; i<frontiers.size() ; i++)
+    {
+        const auto dist = frontiers[i].getDistanceToPose(current_pose); 
+        if(dist < closest_dist)
+        {
+            closest_dist = dist; 
+            closest_idx  = i; 
+        }
+    }
 
 
+    ROS_ERROR_STREAM("Closest frontier has index " << closest_idx << " with distance of " << closest_dist); 
 
     
 
@@ -257,4 +270,26 @@ std::vector<Frontier> Explorer::weightFrontiers(std::vector<Frontier> frontiers)
 
 
     return weighted_frontiers; 
+}
+
+
+geometry_msgs::Point32 Explorer::getRobotsPose(void)
+{
+    geometry_msgs::TransformStamped transformStamped;
+    
+    // try
+    // {
+    //   transformStamped = _tfBuffer.lookupTransform("base_footprint", "map", ros::Time(0));
+    // }
+    // catch (tf2::TransformException &ex) {
+    //   ROS_WARN("%s",ex.what());
+    //   ros::Duration(1.0).sleep();
+    // }
+
+
+    geometry_msgs::Point32 position; 
+    // position.x = transformStamped.transform.translation.x; 
+    // position.y = transformStamped.transform.translation.y; 
+
+    return position; 
 }

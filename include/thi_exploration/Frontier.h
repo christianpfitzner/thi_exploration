@@ -66,12 +66,18 @@ public:
     return centroid; 
   }
 
+
+  double getDistanceToPose(geometry_msgs::Point32 pose)
+  {
+    const auto frontier_pose = this->getCentroid(); 
+    return sqrt(std::pow(pose.x - frontier_pose.x, 2) + std::pow(pose.y - frontier_pose.y, 2)); 
+  }
   
 
 
 private:
   std::vector<unsigned int> _indices; 
-  nav_msgs::OccupancyGrid _map; 
+  nav_msgs::OccupancyGrid   _map; 
   
 };
 

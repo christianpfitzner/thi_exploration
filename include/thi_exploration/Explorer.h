@@ -18,6 +18,7 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <geometry_msgs/PoseArray.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <tf2_ros/transform_listener.h>
 
 
 #include <thi_exploration/Frontier.h>
@@ -128,13 +129,22 @@ private:
     std::vector<Frontier> weightFrontiers(std::vector<Frontier> frontiers) const; 
 
 
+    void publishMarker(std::vector<Frontier> frontiers) const; 
+
+    geometry_msgs::Point32 getRobotsPose(void);
+
+
   private:
     ros::NodeHandle         _nh;      //!< node handle of ros node
     nav_msgs::OccupancyGrid _map;     //!< input of occupancy grid
 
     ros::Publisher          _resize_map_pub; 
     ros::Publisher          _frontier_map_pub; 
-    ros::Publisher          _frontier_goal_pub; 
+    ros::Publisher          _frontier_goal_pub;
+
+
+    // tf2_ros::Buffer            _tfBuffer;
+    // tf2_ros::TransformListener _tfListener; 
 };
 
 
